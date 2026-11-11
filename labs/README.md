@@ -123,10 +123,12 @@ Last run on 2026-11-11 with Terraform 1.17.1, AWS provider 6.72.0, random provid
 
 | Labs | Test status |
 |---|---|
-| 01, 02, 03, 07 | Run end to end: every step, Verify command, "Break it" exercise, and clean-up |
-| 04, 05, 06, 08 | Smoke-tested only: `init`, `validate`, `apply`, Verify, `destroy`. Step-by-step outputs and "Break it" exercises are described but have not been run. Each of these READMEs carries a **Test status** line. |
+| 01, 02, 03, 04, 05, 07 | Run end to end: every step, Verify command, "Break it" exercise, and clean-up |
+| 06, 08 | Smoke-tested only: `init`, `validate`, `apply`, Verify, `destroy`. Step-by-step outputs and "Break it" exercises are described but have not been run. Each of these READMEs carries a **Test status** line. Tracked in [#2](https://github.com/kston83/aws-security-notes/issues/2). |
 
-`docker-compose.yml` itself has not been run; the emulator was started from its native build for these tests. If a step fails on a newer version, check the lab's "What differs on real AWS" section and the provider changelog first.
+floci does not enforce IAM by default. Lab 04 found an opt-in setting, `FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED=true` **(verify)**, under which an assume-role call the trust policy forbids is rejected; the labs were not otherwise run in that mode.
+
+`docker-compose.yml` itself has not been run; the emulator was started from its native build for these tests. Tracked in [#3](https://github.com/kston83/aws-security-notes/issues/3). If a step fails on a newer version, check the lab's "What differs on real AWS" section and the provider changelog first.
 
 ## Lab safety
 
