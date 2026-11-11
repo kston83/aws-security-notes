@@ -23,16 +23,17 @@ aws iam list-attached-role-policies --role-name DEPLOY_ROLE
 aws iam list-role-policies --role-name DEPLOY_ROLE
 aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
   --start-time START_TIME --query 'Events[].CloudTrailEvent' --output text \
-  | jq -c 'select(.requestParameters.roleArn | endswith(":role/DEPLOY_ROLE")) | {eventTime, sub: .userIdentity.userName, session: .requestParameters.roleSessionName, sourceIPAddress}'
+  | jq -c 'select((.requestParameters.roleArn // "") | endswith(":role/DEPLOY_ROLE"))
+      | {eventTime, sub: .userIdentity.userName, session: .requestParameters.roleSessionName, sourceIPAddress}'
 ```
 
-The `sub` value names the repository and ref that asked for the role, for example `repo:ORG/REPO:ref:refs/heads/main` for GitHub Actions **(verify)**. Establish:
+For a `WebIdentityUser`, CloudTrail records the token's `sub` claim as `userIdentity.userName` **(verify)**. For GitHub Actions it names the repository and the environment, ref, or pull request that asked for the role: `repo:ORG_NAME/REPO_NAME:environment:ENVIRONMENT_NAME`, `repo:ORG_NAME/REPO_NAME:ref:refs/heads/BRANCH_NAME`, or `repo:ORG_NAME/REPO_NAME:pull_request` ([formats](../cheatsheets/terraform-aws-provider-security.md#github-actions)). `AssumeRoleWithWebIdentity` is logged in the Region of the STS endpoint the runner called; repeat with `--region` if you find nothing. Establish:
 
 1. **Which link failed?** Code (unreviewed merge), runner, role trust (another repository or branch could assume it), dependency (provider or module), or token.
 2. **What can the role do?** Administrative access in production makes this Critical.
 3. **Window.** From the first suspect event (merge, token leak, upstream change) to now.
 
-If in doubt, treat it as real. A trust policy with no `sub` condition, or a wildcard such as `repo:ORG/*`, is a finding in itself.
+If in doubt, treat it as real. A trust policy with no `sub` condition, or a wildcard such as `repo:ORG_NAME/*`, is a finding in itself.
 
 ## Contain
 
@@ -40,7 +41,7 @@ If in doubt, treat it as real. A trust policy with no `sub` condition, or a wild
 
 ```bash
 gh run list --repo OWNER/REPO --status in_progress
-# changes state: no new runs of this workflow start
+# [changes state] no new runs of this workflow start
 gh workflow disable WORKFLOW_NAME --repo OWNER/REPO
 ```
 
@@ -49,7 +50,7 @@ Side effect: no deployments. Cancelling a run in the middle of an apply can leav
 **2. Block the deployment role.** An explicit deny wins over every allow and is removed with one command.
 
 ```bash
-# changes state: the role can do nothing, including in sessions that already exist
+# [changes state] the role can do nothing, including in sessions that already exist
 aws iam put-role-policy --role-name DEPLOY_ROLE --policy-name IncidentDenyAll \
   --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"*","Resource":"*"}]}'
 ```
@@ -60,7 +61,7 @@ aws iam put-role-policy --role-name DEPLOY_ROLE --policy-name IncidentDenyAll \
 
 ```bash
 aws iam get-role --role-name DEPLOY_ROLE --query 'Role.AssumeRolePolicyDocument' > evidence/DEPLOY_ROLE-trust-before.json
-# changes state: replaces who may assume the role
+# [changes state] replaces who may assume the role
 aws iam update-assume-role-policy --role-name DEPLOY_ROLE --policy-document file://DEPLOY_ROLE-trust-fixed.json
 ```
 
@@ -68,7 +69,11 @@ The fixed policy pins `sub` with `StringEquals` to one repository and one protec
 
 **5. Revoke leaked tokens** at the issuer: HCP Terraform user, team, and organization tokens; CI personal access tokens and deploy keys; registry tokens.
 
-**6. Check for other roles** that trust the same identity provider (`aws iam list-roles` and filter on the provider ARN), in every account the pipeline deploys to. Repeat steps 2 to 4 for each.
+**6. Check for other roles** that trust the same identity provider, in every account the pipeline deploys to. Repeat steps 2 to 4 for each.
+
+```bash
+aws iam list-roles --query "Roles[?contains(to_string(AssumeRolePolicyDocument), 'token.actions.githubusercontent.com')].RoleName" --output text
+```
 
 ## Preserve evidence
 
@@ -79,6 +84,7 @@ The fixed policy pins `sub` with `StringEquals` to one repository and one protec
 ```bash
 terraform state pull > evidence/state-as-found.json
 aws s3api list-object-versions --bucket STATE_BUCKET --prefix STATE_KEY --query 'Versions[].[VersionId,LastModified]' --output table
+aws s3api get-object --bucket STATE_BUCKET --key STATE_KEY --version-id GOOD_VERSION_ID evidence/state-GOOD_VERSION_ID.json   # last version before the window
 ```
 
 - A snapshot of the runner if it is self-hosted: [Compromised EC2 instance](compromised-ec2-instance.md).
@@ -106,7 +112,7 @@ Add `AND useragent NOT LIKE '%Terraform%'` to find calls made by hand with stole
 git worktree add ../known-good GOOD_COMMIT && cd ../known-good
 terraform init -lockfile=readonly
 terraform plan -lock=false -out=compare.tfplan      # -lock=false: a read-only role cannot write the lock, and the pipeline is stopped
-terraform show -json compare.tfplan | jq -r '.resource_changes[] | select(.change.actions != ["no-op"]) | "\(.change.actions | join(",")) \(.address)"'
+terraform show -json compare.tfplan | jq -r '.resource_changes[]? | select(.change.actions != ["no-op"]) | "\(.change.actions | join(",")) \(.address)"'
 ```
 
 Every line is something the suspect runs changed, something in state that the good code does not declare (shown as delete), or drift. Read, do not apply.
@@ -114,23 +120,22 @@ Every line is something the suspect runs changed, something in state that the go
 **3. Check state for injected resources.**
 
 ```bash
-diff <(jq -r '.resources[] | "\(.module // "root") \(.type).\(.name)"' evidence/state-GOOD_VERSION_ID.json | sort) \
-     <(jq -r '.resources[] | "\(.module // "root") \(.type).\(.name)"' evidence/state-as-found.json | sort)
+ADDRS='.resources[] | . as $r | .instances[]
+  | "\($r.module // "root") \($r.mode).\($r.type).\($r.name)\(if .index_key == null then "" else "[\(.index_key | tojson)]" end)"'
+diff <(jq -r "$ADDRS" evidence/state-GOOD_VERSION_ID.json | sort) <(jq -r "$ADDRS" evidence/state-as-found.json | sort)
 ```
 
-**4. Verify providers.** `init -lockfile=readonly` verifies downloaded packages against the checksums already recorded and refuses to change the lock file. Then check the lock file itself:
+**4. Verify providers.** `init -lockfile=readonly` checks downloaded packages against the checksums already recorded and refuses to change the lock file, and its output names each package's signer (`signed by HashiCorp`). That only proves the packages match the lock file. Check the lock file itself: what changed, and whether its `zh:` hashes (SHA-256 of each platform's zip) are ones the registry published for that version.
 
 ```bash
 git diff GOOD_COMMIT HEAD -- .terraform.lock.hcl
-# in a scratch copy of the configuration: build a fresh lock file from the registry and compare
-cp .terraform.lock.hcl ../committed.lock.hcl && rm .terraform.lock.hcl
-terraform providers lock -platform=linux_amd64 -platform=darwin_arm64
-diff ../committed.lock.hcl .terraform.lock.hcl
+SUMS_URL=$(curl -s https://registry.terraform.io/v1/providers/hashicorp/aws/PROVIDER_VERSION/download/linux/amd64 | jq -r .shasums_url)
+curl -sL "$SUMS_URL" | awk '{print "zh:" $1}' | sort > registry-zh.txt
+awk '/provider "registry.terraform.io\/hashicorp\/aws"/,/^}/' .terraform.lock.hcl | grep -o 'zh:[0-9a-f]*' | sort > lock-zh.txt
+comm -13 registry-zh.txt lock-zh.txt      # hashes in the lock that the registry never published: suspect
 ```
 
-List every platform your team and runners use, or the fresh file will lack hashes the committed one has.
-
-A provider whose source address, version, or hashes changed without a matching pull request is suspect. `providers lock` reports the signing key of each package; check it is the publisher you expect.
+Repeat per provider (`NAMESPACE/TYPE`), using the version recorded in the lock file. The same API response gives `shasums_signature_url` and the signing keys, to check the sums file with `gpg`. A provider whose source address, version, or hashes changed without a matching pull request is suspect.
 
 **5. Verify modules.** `git diff GOOD_COMMIT HEAD -- '*.tf' | grep -E 'source|version'`, and compare `.terraform/modules/modules.json` with the sources in code. A Git source pinned to a branch or tag can change without any commit in your repository.
 
@@ -149,7 +154,7 @@ A provider whose source address, version, or hashes changed without a matching p
 
 1. Restore the trust policy in its tightened form and re-enable the workflow.
 2. Before unblocking the role, repeat the read-only plan from Investigate step 2 against the commit you intend to deploy. It should show only the reversions you expect.
-3. Remove the deny (changes state): `aws iam delete-role-policy --role-name DEPLOY_ROLE --policy-name IncidentDenyAll`. Leave the session-revocation policy.
+3. Remove the deny: **[changes state]** `aws iam delete-role-policy --role-name DEPLOY_ROLE --policy-name IncidentDenyAll`. Leave the session-revocation policy.
 4. Apply, then confirm `terraform plan -detailed-exitcode` returns `0`.
 5. Watch the role's activity and new `AssumeRoleWithWebIdentity` subjects closely for two weeks.
 

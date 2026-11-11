@@ -7,7 +7,7 @@
 ## Trigger
 
 - A scheduled `terraform plan -refresh-only -detailed-exitcode` exits `2`
-- HCP Terraform drift detection (health assessment) flags a workspace **(verify)** availability on your plan
+- HCP Terraform drift detection (a health assessment; Standard and Premium editions, remote or agent execution **(verify)**) flags a workspace
 - An ordinary `terraform plan` proposes changes although no code changed
 - An AWS Config rule turns noncompliant, or a configuration change notification arrives, for a resource Terraform manages
 - No pull request, ticket, or change record explains it
@@ -18,8 +18,8 @@
 
 ```bash
 terraform plan -refresh-only -out=drift.tfplan
-terraform show -json drift.tfplan | jq '.resource_drift[] | {address, actions: .change.actions}'
-terraform show -json drift.tfplan | jq '.resource_drift[] | select(.address=="RESOURCE_ADDRESS") | {before: .change.before, after: .change.after}'
+terraform show -json drift.tfplan | jq -c '.resource_drift[]? | {address, actions: .change.actions}'
+terraform show -json drift.tfplan | jq '.resource_drift[]? | select(.address=="RESOURCE_ADDRESS") | {before: .change.before, after: .change.after}'
 ```
 
 `-refresh-only` reports only attributes of resources already in state. It does not see resources created outside Terraform (a new IAM user, a new security group). Also run a normal `terraform plan` to see the difference from configuration.
@@ -48,7 +48,7 @@ Stop when the change is attributed to an expected principal, with a reason, and 
 
 ```bash
 terraform plan -target=RESOURCE_ADDRESS -out=revert.tfplan      # review: only this resource changes
-# changes state: sets the live resource back to what the configuration says
+# [changes state] sets the live resource back to what the configuration says
 terraform apply revert.tfplan
 ```
 
@@ -116,10 +116,10 @@ Decide per resource. Do not run a blanket `terraform apply` before the change is
 
 | Situation | Action |
 |---|---|
-| Unauthorized or unwanted | Revert: `terraform plan`, review, `terraform apply` (changes state and infrastructure) |
+| Unauthorized or unwanted | Revert: `terraform plan`, review, **[changes state]** `terraform apply` (state and infrastructure) |
 | Legitimate and should stay | Adopt into code: edit the configuration to match, open a pull request, and confirm `terraform plan` shows no changes for it |
 | AWS-side value that Terraform should stop managing | `lifecycle { ignore_changes = [ATTRIBUTE] }`, narrowly, with a comment saying why |
-| Computed attribute changed and configuration is unaffected | `terraform apply -refresh-only` (changes state only), after reading every line it proposes |
+| Computed attribute changed and configuration is unaffected | **[changes state]** `terraform apply -refresh-only` (state only), after reading every line it proposes |
 | Resource created outside Terraform that should be kept | `import` block and matching configuration. [Lab 06](../labs/06-drift-and-import/README.md) |
 
 Finish with `terraform plan -detailed-exitcode` returning `0`, the Config rule compliant, and the drift check re-enabled.

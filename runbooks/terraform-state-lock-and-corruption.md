@@ -15,7 +15,7 @@ Usually an operational incident. It becomes a security incident when someone cha
 
 ## Triage
 
-1. **Read the lock.** With S3-native locking (`use_lockfile = true`) the lock is an object beside the state named `STATE_KEY.tflock`. Its body is JSON lock metadata **(verify)**.
+1. **Read the lock.** With S3-native locking (`use_lockfile = true`) the lock is an object beside the state named `STATE_KEY.tflock`. Its body is the same lock info as JSON (`ID`, `Operation`, `Info`, `Who`, `Version`, `Created`, `Path`), as [lab 02](../labs/02-remote-state/README.md) shows. For a non-default workspace the key is `env:/WORKSPACE_NAME/STATE_KEY.tflock` unless `workspace_key_prefix` is set.
 
 ```bash
 aws s3api head-object --bucket STATE_BUCKET --key STATE_KEY.tflock
@@ -65,11 +65,11 @@ If `state pull` fails because the object is corrupt, copy the raw object version
 **3. Release a dead lock,** only after triage step 2 shows the holder is gone. The lock ID is in the error message.
 
 ```bash
-# changes state: removes the lock; a second writer can now start
+# [changes state] removes the lock; a second writer can now start
 terraform force-unlock LOCK_ID
 ```
 
-Side effect: if the holder is in fact alive, two processes write the same state. `force-unlock` does not touch infrastructure and cannot release a local state lock held by another process. If it fails for S3-native locking, deleting the `.tflock` object has the same effect (`aws s3api delete-object --bucket STATE_BUCKET --key STATE_KEY.tflock`, changes state).
+Side effect: if the holder is in fact alive, two processes write the same state. `force-unlock` does not touch infrastructure and cannot release a local state lock held by another process. If it fails for S3-native locking, deleting the `.tflock` object has the same effect: **[changes state]** `aws s3api delete-object --bucket STATE_BUCKET --key STATE_KEY.tflock`. For the legacy DynamoDB lock, **[changes state]** `aws dynamodb delete-item --table-name LOCK_TABLE --key '{"LockID":{"S":"STATE_BUCKET/STATE_KEY"}}'`.
 
 ## Preserve evidence
 
@@ -89,7 +89,7 @@ aws s3api get-object --bucket STATE_BUCKET --key STATE_KEY --version-id VERSION_
 ```sql
 SELECT eventtime, useridentity.arn, eventname, sourceipaddress, useragent,
        json_extract_scalar(requestparameters, '$.key') AS object_key,
-       json_extract_scalar(responseelements, '$.x-amz-version-id') AS version_id
+       json_extract_scalar(responseelements, '$["x-amz-version-id"]') AS version_id
 FROM cloudtrail_logs
 WHERE eventsource = 's3.amazonaws.com'
   AND json_extract_scalar(requestparameters, '$.bucketName') = 'STATE_BUCKET'
@@ -98,13 +98,14 @@ WHERE eventsource = 's3.amazonaws.com'
 ORDER BY eventtime;
 ```
 
-A write whose user agent is not Terraform, or that comes from a person and not the deployment role, was made by hand **(verify)** the user agent string your provider version sends.
+A write from a person rather than the deployment role, or whose user agent does not contain `Terraform/`, was made outside a Terraform run. Check what user agent your Terraform version actually sends **(verify)**; a user agent can be forged, so its presence proves nothing.
 
 **2. What changed between versions.**
 
 ```bash
-diff <(jq -r '.resources[] | "\(.module // "root") \(.mode).\(.type).\(.name)"' evidence/state-GOOD_VERSION_ID.json | sort) \
-     <(jq -r '.resources[] | "\(.module // "root") \(.mode).\(.type).\(.name)"' evidence/state-BAD_VERSION_ID.json | sort)
+ADDRS='.resources[] | . as $r | .instances[]
+  | "\($r.module // "root") \($r.mode).\($r.type).\($r.name)\(if .index_key == null then "" else "[\(.index_key | tojson)]" end)"'
+diff <(jq -r "$ADDRS" evidence/state-GOOD_VERSION_ID.json | sort) <(jq -r "$ADDRS" evidence/state-BAD_VERSION_ID.json | sort)
 ```
 
 Resources removed from state still exist in AWS and are now unmanaged. Resources added to state that are not in code will be destroyed by the next apply.
@@ -118,7 +119,7 @@ Pick the first case that fits.
 **A. Apply failed and left `errored.tfstate`.** It is the newest truth. Push it.
 
 ```bash
-# changes state: overwrites the remote state
+# [changes state] overwrites the remote state
 terraform state push errored.tfstate
 ```
 
@@ -127,22 +128,22 @@ terraform state push errored.tfstate
 ```bash
 jq '{serial, lineage}' evidence/state-GOOD_VERSION_ID.json
 jq '.serial = NEW_SERIAL' evidence/state-GOOD_VERSION_ID.json > restore.tfstate     # NEW_SERIAL = current remote serial + 1
-# changes state: overwrites the remote state with the restored copy
+# [changes state] overwrites the remote state with the restored copy
 terraform state push restore.tfstate
 ```
 
 **C. State deleted, or too corrupt for Terraform to read.** Work on the object directly. Remove the delete marker, or copy the good version over the current one:
 
 ```bash
-# changes state: removing the delete marker makes the previous version current again
+# [changes state] removing the delete marker makes the previous version current again
 aws s3api delete-object --bucket STATE_BUCKET --key STATE_KEY --version-id DELETE_MARKER_VERSION_ID
-# changes state: writes the good version as the newest version
+# [changes state] writes the good version as the newest version
 aws s3api put-object --bucket STATE_BUCKET --key STATE_KEY --body evidence/state-GOOD_VERSION_ID.json
 ```
 
 The bucket's default encryption applies to the new object. Add `--server-side-encryption` and `--ssekms-key-id` if the backend sets `kms_key_id` explicitly.
 
-With DynamoDB locking, the `-md5` item must match the restored object; update or delete it **(verify)**.
+With DynamoDB locking, the `-md5` item must match the restored object, or `init` and `plan` fail with a checksum error. Delete it and the next state write recreates it **(verify)**: **[changes state]** `aws dynamodb delete-item --table-name LOCK_TABLE --key '{"LockID":{"S":"STATE_BUCKET/STATE_KEY-md5"}}'`.
 
 **D. No good version exists.** Rebuild with `import` blocks, one per resource, starting from an empty state:
 
@@ -155,7 +156,7 @@ import {
 
 ```bash
 terraform plan        # expect: N to import, 0 to add, 0 to change, 0 to destroy
-# changes state: records the imported resources in state
+# [changes state] records the imported resources in state
 terraform apply
 ```
 
@@ -169,7 +170,7 @@ A restored state is older than reality. Anything applied after that version is m
 
 ```bash
 terraform plan -refresh-only          # read every proposed change
-# changes state: accepts live values into state; changes no infrastructure
+# [changes state] accepts live values into state; changes no infrastructure
 terraform apply -refresh-only
 ```
 

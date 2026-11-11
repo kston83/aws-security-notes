@@ -41,7 +41,7 @@ Stop only if the file is provably a lab or emulator state with no real credentia
 **1. Lock down the bucket.** Reversible, immediate.
 
 ```bash
-# changes state: blocks all public access to the bucket
+# [changes state] blocks all public access to the bucket
 aws s3api put-public-access-block --bucket STATE_BUCKET \
   --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 ```
@@ -50,7 +50,7 @@ Block Public Access does not stop a cross-account grant. Save the policy, then r
 
 ```bash
 aws s3api get-bucket-policy --bucket STATE_BUCKET --query Policy --output text > evidence/STATE_BUCKET-policy-before.json
-# changes state: replaces the bucket policy
+# [changes state] replaces the bucket policy
 aws s3api put-bucket-policy --bucket STATE_BUCKET --policy file://STATE_BUCKET-policy-fixed.json
 ```
 
@@ -59,7 +59,7 @@ Side effect: a policy that is too tight also locks out the pipeline. Keep the de
 **2. Deactivate exposed AWS access keys now.** Do not wait for a Terraform run. Get the key IDs from the exposed copy (see Investigate step 1).
 
 ```bash
-# changes state: the key stops working everywhere
+# [changes state] the key stops working everywhere
 aws iam update-access-key --user-name USER_NAME --access-key-id ACCESS_KEY_ID --status Inactive
 ```
 
@@ -69,7 +69,7 @@ Side effect: whatever uses the key breaks until step 2 of Eradicate. Then follow
 
 ```bash
 gh api repos/OWNER/REPO/actions/artifacts --paginate --jq '.artifacts[] | [.id,.name,.created_at] | @tsv'
-# changes state: deletes the artifact (save a copy as evidence first)
+# [changes state] deletes the artifact (save a copy as evidence first)
 gh api -X DELETE repos/OWNER/REPO/actions/artifacts/ARTIFACT_ID
 ```
 
@@ -88,13 +88,14 @@ aws s3api get-object --bucket STATE_BUCKET --key STATE_KEY --version-id VERSION_
 
 ## Investigate
 
-**1. List the secrets in the exposed copy.** Work on the exposed versions, not only the current state. `sensitive_attributes` lists the paths Terraform knows are sensitive (layout varies by Terraform version **(verify)**).
+**1. List the secrets in the exposed copy.** Work on the exposed versions, not only the current state. In raw state (format `"version": 4`), each `.resources[].instances[]` entry holds `attributes` and a `sensitive_attributes` list of the paths Terraform knows are sensitive. Data sources count too: a `data` block that read a secret stored it. The layout of each path entry varies by Terraform version **(verify)**; the filters below only test whether the list is empty.
 
 ```bash
-jq -r '.resources[] | select(.mode=="managed") | . as $r | .instances[]
+jq -r '.resources[] | . as $r | .instances[]
   | select((.sensitive_attributes // []) | length > 0)
-  | "\($r.module // "root")\t\($r.type).\($r.name)"' evidence/state-VERSION_ID.json | sort -u
-jq -r '.outputs | to_entries[] | select(.value.sensitive == true) | .key' evidence/state-VERSION_ID.json
+  | "\($r.module // "root")\t\($r.mode).\($r.type).\($r.name)\(if .index_key == null then "" else "[\(.index_key | tojson)]" end)"' \
+  evidence/state-VERSION_ID.json | sort -u
+jq -r '.outputs // {} | to_entries[] | select(.value.sensitive == true) | .key' evidence/state-VERSION_ID.json
 jq -r '.resources[].type' evidence/state-VERSION_ID.json | sort | uniq -c | sort -rn
 jq -r '.resources[] | select(.type=="aws_iam_access_key") | .instances[].attributes | [.user,.id] | @tsv' evidence/state-VERSION_ID.json
 ```
@@ -149,18 +150,18 @@ For a repository, list forks, clones, and integrations with read access. If you 
 
 ```bash
 terraform plan -replace=RESOURCE_ADDRESS -out=rotate.tfplan     # review: only the intended replacements
-# changes state: destroys and recreates the resource, issuing a new secret
+# [changes state] destroys and recreates the resource, issuing a new secret
 terraform apply rotate.tfplan
 ```
 
 Side effects: `-replace` destroys before it creates unless the resource sets `create_before_destroy`, so consumers see an outage until they pick up the new value. The new secret is written to state again, so finish Contain first.
 
-**2. Delete the exposed access keys** once replaced (`aws iam delete-access-key`).
+**2. Delete the exposed access keys** once replaced. **[changes state]** `aws iam delete-access-key --user-name USER_NAME --access-key-id ACCESS_KEY_ID`
 
 **3. Purge the copy.** From git history, then force-push and have every clone re-cloned:
 
 ```bash
-# changes state: rewrites repository history
+# [changes state] rewrites repository history
 git filter-repo --invert-paths --path PATH/TO/terraform.tfstate --path PATH/TO/terraform.tfstate.backup
 ```
 
