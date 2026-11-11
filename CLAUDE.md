@@ -45,7 +45,7 @@ The content is heavily cross-linked, so a change in one file usually means updat
 - Controls are comma-separated, and each one becomes its own CSV row. Type uses the abbreviations `I`, `S`, and `E`, comma-separated.
 - A literal `|` inside a cell, even inside backticks, breaks the row.
 
-**`check-links.sh`** only reads links of the form `](target)` where the target has no spaces. It builds anchor slugs GitHub-style by lowercasing, dropping characters other than `a-z0-9 _-`, and turning spaces into `-`. For example, `### Task 1.1: Monitoring and alerting` becomes `#task-11-monitoring-and-alerting`. It doesn't handle the `-1` suffixes GitHub adds to duplicate headings, so avoid linking to duplicate headings.
+**`check-links.sh`** only reads links of the form `](target)` where the target has no spaces, and ignores anything inside fenced code blocks or inline code spans. It builds anchor slugs GitHub-style by lowercasing, dropping characters other than `a-z0-9 _-`, and turning spaces into `-`. For example, `### Task 1.1: Monitoring and alerting` becomes `#task-11-monitoring-and-alerting`. It doesn't handle the `-1` suffixes GitHub adds to duplicate headings, so avoid linking to duplicate headings.
 
 ## Content rules worth remembering
 
