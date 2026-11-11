@@ -89,7 +89,7 @@ Scope rules with a security angle:
 - **A variable with no default is required.** A module author makes a control mandatory by not giving it a default, and enforces its shape with `validation`.
 - **What a module does not expose cannot be changed by the caller.** If the public access block is hard-coded inside the module and has no variable, callers cannot switch it off. That is the point of a hardened module.
 - **Sensitivity crosses the boundary.** A child output built from a sensitive value must be marked `sensitive = true`, or Terraform returns an error. The value is still in state; see [configuration](04-configuration.md).
-- **Ephemeral values can cross too.** A variable or a child module output marked `ephemeral = true` passes a secret through a module without it being stored (Terraform 1.10 and later **(verify)**).
+- **Ephemeral values can cross too.** A variable or a child module output marked `ephemeral = true` passes a secret through a module without it being stored (Terraform 1.10 and later).
 - Variable precedence rules (`-var`, tfvars files, `TF_VAR_`) apply only to the **root** module. Child module variables get values only from the `module` block or their defaults.
 
 ## Objective 5c: Using modules
@@ -170,7 +170,7 @@ terraform {
 }
 ```
 
-With AWS provider v6 many resources also take a per-resource `region` argument, which can replace an aliased provider when only the Region differs **(verify)**; an alias is still needed for a different account or role. See the [AWS provider security cheatsheet](../../cheatsheets/terraform-aws-provider-security.md).
+From AWS provider v6.0.0 most Regional resources also take a per-resource `region` argument, which can replace an aliased provider when only the Region differs (see [fundamentals](02-terraform-fundamentals.md#objective-2c-multiple-provider-configurations)); an alias is still needed for a different account or role. See the [AWS provider security cheatsheet](../../cheatsheets/terraform-aws-provider-security.md).
 
 ## Objective 5d: Module versions
 
@@ -223,6 +223,7 @@ Resources inside a child are private. Add `output "key_arn" { value = aws_kms_ke
 
 **3. A plan on the CI runner shows new IAM resources that nobody added.**
 The module block had `version = "~> 5.0"`, and the runner installed a newer release than the author tested, since modules are not in the lock file. Pin an exact version, review the release that introduced the IAM resources, and treat unexplained resources as a possible compromise until shown otherwise ([pipeline compromise runbook](../../runbooks/terraform-pipeline-compromise.md), [unexpected drift runbook](../../runbooks/terraform-unexpected-drift.md)).
+
 ## Pitfalls and exam traps
 
 - `version` works only with registry sources. For Git, use `?ref=`.

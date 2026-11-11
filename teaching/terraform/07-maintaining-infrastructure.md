@@ -39,7 +39,7 @@ There are two ways to import. Both need the resource's **import ID**, whose form
 | Many resources | `for_each` on the block | Run the command repeatedly |
 | Generates configuration | Yes, with `-generate-config-out` | No. The `resource` block must already exist. |
 | Works in pipelines and HCP Terraform runs | Yes, it is part of a normal plan and apply | Needs CLI access to state |
-| Available since | Terraform 1.5 **(verify)** | All versions |
+| Available since | Terraform 1.5 | All versions |
 
 HashiCorp recommends the block. Know both for the exam.
 
@@ -58,7 +58,7 @@ resource "aws_s3_bucket" "logs" {
 
 - `to` is the address to bind, and it must match a `resource` block (or one that will be generated).
 - `id` is the import ID. It can be an expression, but its value must be known at plan time.
-- `identity` is an alternative to `id` for resource types that publish a structured identity, for example account, Region, and bucket name. Use one or the other. It is newer than the 1.12 exam target **(verify)**.
+- `identity` is an alternative to `id` for resource types that publish a structured identity, for example account, Region, and bucket name. Use one or the other. It was added in Terraform 1.12, so it is within the exam's version, though the content list does not name it.
 - `provider` selects an aliased provider configuration, for a resource in another Region or account.
 - `for_each` imports many similar resources with one block.
 
@@ -85,13 +85,13 @@ terraform plan -generate-config-out=generated.tf   # writes a new file; changes 
 3. Review and edit the generated file. It is Terraform's best guess: it may set arguments that conflict with each other, hard-code values that should be references, and include defaults you do not need.
 4. Run `terraform plan` until it shows only the import, then `terraform apply`.
 
-The feature has been labeled experimental since it arrived, and the generated format may change **(verify)**.
+The documentation still labels the feature experimental, as it has been since Terraform 1.5, and warns that later minor versions may change the generated format **(verify)**.
 
 ### Import rules
 
 - Import one real object to **one** address. Binding it to two addresses means two resources fight over it.
 - Import never modifies the real object. The first apply afterward might, if configuration and reality differ.
-- A provider configuration used for import cannot depend on a data source or another resource's output. It can use variables.
+- With the `terraform import` command, the provider configuration cannot depend on non-variable inputs such as a data source. It can use variables.
 - Generated configuration and state for an imported resource contain whatever the API returns, including secrets. Review `generated.tf` before committing it.
 - Import is how you take back a resource that was removed from state with `terraform state rm` or a `removed` block.
 

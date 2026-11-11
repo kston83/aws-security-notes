@@ -255,7 +255,7 @@ Consequences worth holding on to:
 
 - Terraform manages only what is in state. A resource created by hand is invisible to it until it is **imported**.
 - A resource in state but removed from configuration is planned for **destruction**.
-- **State is sensitive.** Resource attributes are stored in plain text, including database passwords, generated keys, and anything else a provider returns. Marking a value `sensitive` hides it from CLI output only; it is still in the state file. Ephemeral values and write-only arguments, added in Terraform 1.10 and 1.11 **(verify)**, are the mechanisms that keep a value out of state altogether.
+- **State is sensitive.** Resource attributes are stored in plain text, including database passwords, generated keys, and anything else a provider returns. Marking a value `sensitive` hides it from CLI output only; it is still in the state file. Ephemeral values and write-only arguments, added in Terraform 1.10 and 1.11, are the mechanisms that keep a value out of state altogether.
 - Do not edit the state file by hand and do not commit it to version control. Use the `terraform state` commands.
 - Losing state does not delete the infrastructure. It makes Terraform forget it, and the next apply tries to create everything again.
 

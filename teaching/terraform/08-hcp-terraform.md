@@ -53,7 +53,7 @@ A **speculative plan** is plan-only: it can never be applied, and it does not wa
 |---|---|---|
 | Remote (default) | HCP Terraform's disposable workers | HCP Terraform |
 | Local | Your machine or CI runner | HCP Terraform, used only as a state store |
-| Agent | An **HCP Terraform agent** you run inside your network, which polls outward for work | HCP Terraform. For private networks that allow no inbound access. A paid feature **(verify)**. |
+| Agent | An **HCP Terraform agent** you run inside your network, which polls outward for work | HCP Terraform. For private networks that allow no inbound access. Every edition includes agents; the number of concurrent agent runs grows with the edition **(verify)**. |
 
 ### The cloud block
 
@@ -171,6 +171,7 @@ HCP Terraform is sold as Free, Essentials, Standard, and Premium editions **(ver
 | Run tasks on Free | One run task, attached to up to ten workspaces **(verify)** |
 | Health assessments (drift detection, continuous validation) | Standard and Premium **(verify)** |
 | Audit trails | Standard and Premium, 14 days of retention **(verify)** |
+| Agents | All editions, with 1 concurrent agent run on Free and Essentials, more on Standard and Premium **(verify)** |
 | Remote state, remote runs, VCS connection, private registry, dynamic credentials | All editions **(verify)** |
 
 The exam asks what the features do, not which edition has them.

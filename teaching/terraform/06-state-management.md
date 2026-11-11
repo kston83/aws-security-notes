@@ -128,9 +128,9 @@ Rules that apply to every backend:
 | `workspace_key_prefix` | Prefix for non-default workspaces, default `env:` **(verify)**. Their state lives at `env:/WORKSPACE/KEY`. |
 | `assume_role` | An object with `role_arn` and optional settings, so the backend can use a different role or account than the provider |
 
-**S3-native locking.** With `use_lockfile = true`, Terraform writes a lock object named `KEY.tflock` next to the state object, using an S3 conditional write so that only one writer can create it, and deletes it when the run ends. No second service is involved. It arrived as an experiment in Terraform 1.10 and became generally available in 1.11 **(verify)**, so it is in scope for the 1.12 exam.
+**S3-native locking.** With `use_lockfile = true`, Terraform writes a lock object named `KEY.tflock` next to the state object, using an S3 conditional write so that only one writer can create it, and deletes it when the run ends. No second service is involved. It arrived in Terraform 1.10 and was declared generally available in 1.11, the release that also deprecated the DynamoDB arguments, so it is in scope for the 1.12 exam.
 
-**Status of DynamoDB locking.** Before 1.10, locking needed a DynamoDB table with a partition key named `LockID` (type String), named in `dynamodb_table`. The current documentation marks that argument deprecated and says DynamoDB-based locking will be removed in a future minor version. It still works, with a warning **(verify)**. Both arguments can be set together during migration, and Terraform then takes both locks. New configurations should use `use_lockfile` only. Expect older material, and older exam questions, to assume DynamoDB.
+**Status of DynamoDB locking.** Before 1.10, locking needed a DynamoDB table with a partition key named `LockID` (type String), named in `dynamodb_table`. Since 1.11 the documentation marks that argument deprecated and says DynamoDB-based locking will be removed in a future minor version, with no version named yet **(verify)**. Until then it still works. Both arguments can be set together during migration, and Terraform then takes both locks. New configurations should use `use_lockfile` only. Expect older material, and older exam questions, to assume DynamoDB.
 
 Locking is opt-in on S3. A backend block with neither argument has **no locking at all**.
 
@@ -243,8 +243,8 @@ removed {
 
 | Block | Effect | Notes |
 |---|---|---|
-| `moved` | Changes an address in state | Works for renames, moves into or out of modules, and moves to `count` or `for_each` instances. Available since Terraform 1.1 **(verify)**. |
-| `removed` | Removes a resource from state | `destroy = false` forgets it and leaves it running. `destroy = true` also destroys it. Do not include an instance key in `from`. Available since Terraform 1.7 **(verify)**. |
+| `moved` | Changes an address in state | Works for renames, moves into or out of modules, and moves to `count` or `for_each` instances. Available since Terraform 1.1. |
+| `removed` | Removes a resource from state | `destroy = false` forgets it and leaves it running. `destroy = true` also destroys it. Do not include an instance key in `from`. Available since Terraform 1.7. |
 | `import` | Adds an existing object to state | Covered in [maintaining infrastructure](07-maintaining-infrastructure.md) |
 
 ### State subcommands that change state

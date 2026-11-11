@@ -1,6 +1,6 @@
 # Securing Terraform on AWS
 
-> **Last reviewed:** 2026-11-11 · **SCS-C03:** 6.2.1 · **Terraform Associate (004):** 4h, 6b, 6c · **Related:** [Domain 6](../06-security-foundations-and-governance.md#task-62-deployment), [provider security cheatsheet](../../cheatsheets/terraform-aws-provider-security.md), [state and backends cheatsheet](../../cheatsheets/terraform-state-and-backends.md), [pipeline compromise runbook](../../runbooks/terraform-pipeline-compromise.md), [IaC control mappings](../../control-mappings/services/iac-terraform.md)
+> **Last reviewed:** 2026-11-11 · **Terraform Associate (004):** 4h, 6b, 6c · **SCS-C03:** 6.2.1 · **Related:** [Domain 6](../06-security-foundations-and-governance.md#task-62-deployment), [provider security cheatsheet](../../cheatsheets/terraform-aws-provider-security.md), [state and backends cheatsheet](../../cheatsheets/terraform-state-and-backends.md), [pipeline compromise runbook](../../runbooks/terraform-pipeline-compromise.md), [IaC control mappings](../../control-mappings/services/iac-terraform.md)
 
 This note is the bridge between the AWS security notes and the Terraform notes. It is not a Terraform Associate exam domain. It covers what SCS-C03 skill 6.2.1 calls "third-party IaC" and overlaps Terraform objectives 4h (sensitive data), 6b (locking), and 6c (remote state).
 
@@ -62,7 +62,7 @@ Responding to these: [pipeline compromise](../../runbooks/terraform-pipeline-com
 
 | CI system | Issuer | `aud` to require | `sub` format |
 |---|---|---|---|
-| GitHub Actions | `token.actions.githubusercontent.com` | `sts.amazonaws.com` (set by the AWS credentials action) | `repo:ORG_NAME/REPO_NAME:ref:refs/heads/BRANCH`, or `repo:ORG_NAME/REPO_NAME:environment:ENV_NAME` when the job uses an environment, or `repo:ORG_NAME/REPO_NAME:pull_request`. Newer repositories use a form that also carries owner and repository IDs **(verify)** |
+| GitHub Actions | `token.actions.githubusercontent.com` | `sts.amazonaws.com` (set by the AWS credentials action) | `repo:ORG_NAME/REPO_NAME:ref:refs/heads/BRANCH`, or `repo:ORG_NAME/REPO_NAME:environment:ENV_NAME` when the job uses an environment, or `repo:ORG_NAME/REPO_NAME:pull_request`. Repositories created after 15 July 2026 default to an immutable form that adds the numeric owner and repository IDs, `repo:ORG_NAME@OWNER_ID/REPO_NAME@REPO_ID:ref:refs/heads/BRANCH`; older repositories keep the form above unless they opt in **(verify)** |
 | GitLab CI/CD | Your GitLab URL | The value you set in the job's `id_tokens` block | `project_path:GROUP/PROJECT:ref_type:branch:ref:BRANCH` **(verify)** |
 | HCP Terraform dynamic provider credentials | `app.terraform.io` | `aws.workload.identity` | `organization:ORG_NAME:project:PROJECT_NAME:workspace:WORKSPACE_NAME:run_phase:RUN_PHASE`, where the phase is `plan` or `apply` |
 
@@ -85,7 +85,7 @@ Trust policy for a GitHub Actions apply role, usable only from the `production` 
 }
 ```
 
-A trust policy with no `sub` condition, or with `repo:ORG_NAME/*`, trusts every repository and every branch that the issuer serves for that organization. For HCP Terraform, always check at least the audience and the organization name; without the organization, any HCP Terraform customer could assume the role. HCP Terraform is switched on per workspace with `TFC_AWS_PROVIDER_AUTH=true` and `TFC_AWS_RUN_ROLE_ARN` (or `TFC_AWS_PLAN_ROLE_ARN` and `TFC_AWS_APPLY_ROLE_ARN` for separate roles). More in [HCP Terraform](08-hcp-terraform.md).
+The policy above uses the older `sub` form; for a repository on the immutable form, match `repo:ORG_NAME@OWNER_ID/REPO_NAME@REPO_ID:environment:production` instead, and confirm the claim from a real token before relying on it. A trust policy with no `sub` condition, or with `repo:ORG_NAME/*`, trusts every repository and every branch that the issuer serves for that organization. For HCP Terraform, always check at least the audience and the organization name; without the organization, any HCP Terraform customer could assume the role. HCP Terraform is switched on per workspace with `TFC_AWS_PROVIDER_AUTH=true` and `TFC_AWS_RUN_ROLE_ARN` (or `TFC_AWS_PLAN_ROLE_ARN` and `TFC_AWS_APPLY_ROLE_ARN` for separate roles). More in [HCP Terraform](08-hcp-terraform.md).
 
 ### Plan role and apply role
 
@@ -157,7 +157,7 @@ The goal, in order of preference: the secret never reaches Terraform; it reaches
 | **Data source** | `data "aws_secretsmanager_secret_version"` | **Yes**, in plain text |
 | **`sensitive = true`** | Redacts the value in CLI and UI output | **Yes**. It hides output; it does not protect storage. |
 
-`terraform output -json` and `terraform output -raw` print sensitive values in full. A root module output cannot be ephemeral.
+`terraform output NAME`, `terraform output -json`, and `terraform output -raw NAME` print sensitive values in full. A root module output cannot be ephemeral.
 
 Never commit `terraform.tfstate`, `*.tfstate.backup`, `.terraform/`, `crash.log`, saved plan files, or any `.tfvars` file that holds secrets. Supply secret inputs through `TF_VAR_NAME` environment variables from the CI secret store, or better, through an ephemeral resource that reads them from Secrets Manager or Vault. Language detail is in [configuration, objective 4h](04-configuration.md). Practice: [lab 05](../../labs/05-kms-and-secrets/README.md).
 

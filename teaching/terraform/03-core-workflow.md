@@ -248,7 +248,7 @@ Destroy is routine for short-lived environments and almost never right for produ
 
 - It is purely cosmetic. It does not validate, does not reorder blocks, and does not rename anything.
 - It needs no `init`, no credentials, and no state.
-- It covers `.tf` and `.tfvars` files, and test files (`.tftest.hcl`) **(verify)**.
+- It covers `.tf` and `.tfvars` files, and test files (`.tftest.hcl`).
 - The canonical style can change slightly between Terraform versions; run it again after upgrading.
 
 `fmt` enforces a subset of the HashiCorp **style guide**. The rest is convention: lowercase names with underscores, no resource type repeated in the name, `main.tf` / `variables.tf` / `outputs.tf` / `providers.tf` / `terraform.tf` file layout, a description on every variable and output. The security value is indirect: consistent formatting keeps diffs small, so the real change in a pull request is easy to see.
