@@ -177,7 +177,7 @@ Check duration, price, and delivery options on the [certification page](https://
 
 | Skill | Statement | Covered in |
 |---|---|---|
-| 6.2.1 | IaC across accounts (StackSets, third-party IaC, CloudFormation Guard, cfn-lint) | [teaching/06](../teaching/06-security-foundations-and-governance.md#task-62-deployment) |
+| 6.2.1 | IaC across accounts (StackSets, third-party IaC, CloudFormation Guard, cfn-lint) | [teaching/06](../teaching/06-security-foundations-and-governance.md#task-62-deployment), [Securing Terraform on AWS](../teaching/terraform/09-securing-terraform-on-aws.md), [labs](../labs/README.md) |
 | 6.2.2 | Tags to organize resources | [teaching/06](../teaching/06-security-foundations-and-governance.md#tagging) |
 | 6.2.3 | Deploy and enforce policies from a central source (Firewall Manager) | [teaching/06](../teaching/06-security-foundations-and-governance.md#central-enforcement) |
 | 6.2.4 | Securely share resources across accounts (Service Catalog, RAM) | [teaching/06](../teaching/06-security-foundations-and-governance.md#sharing) |

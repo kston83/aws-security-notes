@@ -36,6 +36,16 @@ Topics you need for the other exam that the security notes cover only lightly:
 3. **ANS-C01** if you own network security architecture, or **DOP-C02** if you own security automation and pipelines.
 4. **SAP-C02** when you start designing multi-account landing zones.
 
+**Terraform Associate (004)** fits before or alongside SCS-C03 if you deploy security controls as code. See [Non-AWS certifications](#non-aws-certifications).
+
+## Non-AWS certifications
+
+| Certification | Why it pairs with these notes | Depth expected | Notes to read |
+|---|---|---|---|
+| HashiCorp Certified: Terraform Associate (004) | SCS-C03 skill 6.2.1 expects IaC deployment, and most controls in this repo are deployed that way | Foundational Terraform CLI, configuration language, state, and HCP Terraform; no AWS-specific content | [Terraform blueprint](terraform-associate-blueprint.md), [Terraform study plan](terraform-study-plan.md), [labs](../labs/README.md) |
+
+Gaps relative to the exam: none in the objectives, but HCP Terraform (domain 8) has a teaching note and no lab. What the repo adds beyond the exam is listed in the [blueprint](terraform-associate-blueprint.md#in-this-repo-but-not-on-the-exam).
+
 ## Non-AWS frameworks that pair with these notes
 
 | Framework | Where it shows up here |
