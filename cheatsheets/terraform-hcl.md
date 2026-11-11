@@ -18,9 +18,9 @@
 | `moved` | none | Record an address change so state follows it |
 | `import` | none | Adopt an existing object into state on the next apply |
 | `removed` | none | Drop an object from state, with or without destroying it |
-| `check` | name | Assertion evaluated every plan and apply; failure is a warning |
+| `check` | name | Assertion evaluated every plan and apply; failure is a warning. 1.5 or later. |
 
-Test files (`*.tftest.hcl`) add `run`, `variables`, `mock_provider`, `override_resource`, `override_data`, and `override_module`.
+Test files (`*.tftest.hcl`, Terraform 1.6 or later) add `run`, `variables`, and, from 1.7, `mock_provider`, `override_resource`, `override_data`, and `override_module`.
 
 ## References
 
@@ -58,7 +58,7 @@ variable "environment" {
   default     = "dev"
   nullable    = false            # a caller passing null gets the default instead
   sensitive   = false            # true redacts it in CLI output; it is still written to state
-  ephemeral   = false            # true keeps it out of state and plan files entirely
+  ephemeral   = false            # true keeps it out of state and plan files; add sensitive to redact it too
 
   validation {
     condition     = contains(["dev", "stage", "prod"], var.environment)
@@ -75,14 +75,14 @@ output "bucket_arn" {
 
 **Variable definition precedence, highest first.** A higher source overrides a lower one:
 
-1. `-var` and `-var-file` on the command line, in the order given (and variables set in HCP Terraform)
+1. `-var` and `-var-file` on the command line, in the order given
 2. `*.auto.tfvars` and `*.auto.tfvars.json`, in lexical order of file name
 3. `terraform.tfvars.json`
 4. `terraform.tfvars`
 5. `TF_VAR_name` environment variables
 6. The `default` in the `variable` block
 
-No value from any source and no default: Terraform prompts, or fails with `-input=false`. A child module sees only the variables passed in its `module` block; nothing is inherited.
+HCP Terraform inserts workspace variables and variable sets below CLI `-var` and local `TF_VAR_` values and above `*.auto.tfvars` and `terraform.tfvars`; priority variable sets outrank everything ([HCP Terraform variable precedence](https://developer.hashicorp.com/terraform/cloud-docs/workspaces/variables)) **(verify)**. No value from any source and no default: Terraform prompts, or fails with `-input=false`. A child module sees only the variables passed in its `module` block; nothing is inherited.
 
 ## Meta-arguments
 
@@ -90,7 +90,7 @@ No value from any source and no default: Terraform prompts, or fails with `-inpu
 |---|---|---|
 | `count = N` | resource, data, module, ephemeral | N instances, addressed `NAME[0]`. Removing a middle item renumbers the rest. |
 | `for_each = MAP_OR_SET` | resource, data, module, ephemeral | One instance per key, addressed `NAME["key"]`. Keys must be known at plan time and not sensitive. |
-| `depends_on = [REF]` | resource, data, module, ephemeral, output, check | Explicit ordering when no attribute reference expresses it |
+| `depends_on = [REF]` | resource, data, module, ephemeral, output | Explicit ordering when no attribute reference expresses it |
 | `provider = aws.ALIAS` | resource, data, ephemeral | Use a non-default provider configuration |
 | `providers = { aws = aws.ALIAS }` | module | Pass provider configurations to a child module |
 | `lifecycle { }` | resource (some arguments on data and ephemeral) | See below |
@@ -148,6 +148,34 @@ resource "aws_security_group" "web" {
 ```
 
 `dynamic` generates nested blocks only. It cannot generate `resource` or `lifecycle` blocks.
+
+Chain `for_each` from one resource into the next: the keys carry through, so each bucket gets its own policy.
+
+```hcl
+data "aws_iam_policy_document" "tls_only" {
+  for_each = aws_s3_bucket.this                       # a map of objects, keyed like the buckets
+  statement {
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [each.value.arn, "${each.value.arn}/*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "tls_only" {
+  for_each = aws_s3_bucket.this
+  bucket   = each.value.id
+  policy   = data.aws_iam_policy_document.tls_only[each.key].json
+}
+```
 
 ## Built-in functions
 
@@ -251,15 +279,15 @@ removed {                                 # delete the resource block and add th
 }
 ```
 
-`import` also accepts `identity = { ... }` in place of `id` for resource types that publish a resource identity (1.12 and later **(verify)**). All three blocks can be deleted once every state they apply to has been applied; shared modules keep `moved` blocks longer.
+Versions **(verify)**: `moved` 1.1; `import` 1.5, with `for_each` from 1.7; `removed` 1.7. `import` also accepts `identity = { ... }` in place of `id` for resource types that publish a resource identity (1.12 and later **(verify)**). All three blocks can be deleted once every state they apply to has been applied; shared modules keep `moved` blocks longer.
 
 ## Sensitive, ephemeral, write-only
 
 | Mechanism | Hidden in CLI output | Kept out of state and plan | Notes |
 |---|---|---|---|
 | `sensitive = true` on variable or output | Yes | **No** | Redaction only. Anything that derives from it is also marked. |
-| `ephemeral = true` on variable or child-module output | Yes | Yes | Usable only in ephemeral contexts. Root module outputs cannot be ephemeral. |
-| `ephemeral "TYPE" "NAME"` block | Yes | Yes | Opened on every plan and apply. Introduced in 1.10 **(verify)**. |
+| `ephemeral = true` on variable or child-module output | Only if also `sensitive = true` | Yes | Usable only in ephemeral contexts. Root module outputs cannot be ephemeral. Introduced in 1.10 **(verify)**. |
+| `ephemeral "TYPE" "NAME"` block | Not in the plan at all | Yes | Opened on every plan and apply. Introduced in 1.10 **(verify)**. |
 | Write-only argument (`NAME_wo`) | Yes | Yes | Sent to the provider, never read back. Change the paired `NAME_wo_version` to send a new value. Introduced in 1.11 **(verify)**. |
 
 Ephemeral values may be used in: write-only arguments, other `ephemeral` blocks, `locals`, ephemeral variables and outputs, `provider` blocks, and provisioner and `connection` blocks. Worked AWS example: [AWS provider security cheatsheet](terraform-aws-provider-security.md).
@@ -297,6 +325,6 @@ The `terraform` block takes literal values only: no variables, locals, or functi
 | GitHub | `"github.com/ORG_NAME/REPO_NAME//modules/vpc?ref=v1.2.0"` | `?ref=` tag or commit SHA |
 | Generic Git | `"git::https://example.com/network.git?ref=COMMIT_SHA"` or `"git::ssh://git@example.com/network.git"` | `?ref=` |
 | HTTP archive | `"https://example.com/network.zip"` | In the URL |
-| S3 or GCS | `"s3::https://BUCKET.s3.eu-west-1.amazonaws.com/network.zip"`, `"gcs::https://www.googleapis.com/storage/v1/BUCKET/network.zip"` | In the object key |
+| S3 or GCS | `"s3::https://s3-eu-west-1.amazonaws.com/BUCKET/network.zip"`, `"gcs::https://www.googleapis.com/storage/v1/BUCKET/network.zip"` | In the object key |
 
 The `version` argument works **only** with registry sources. `//` separates the repository from a subdirectory. Pin Git sources to a commit SHA when supply-chain integrity matters, since tags can be moved. After changing `source` or `version`, run `terraform init`.

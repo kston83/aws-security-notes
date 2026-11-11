@@ -54,7 +54,7 @@ terraform {
 | Argument | Notes |
 |---|---|
 | `bucket`, `key`, `region` | Required. `key` is the object path of the state. |
-| `use_lockfile` | `true` turns on S3-native locking: a `KEY.tflock` object written with a conditional put. Default `false`. Added in 1.10 **(verify)**. |
+| `use_lockfile` | `true` turns on S3-native locking: a `KEY.tflock` object written with a conditional put. Default `false`. Added in 1.10, declared generally available in 1.11. |
 | `encrypt` | `true` requests server-side encryption for the state and lock objects |
 | `kms_key_id` | KMS key ARN for SSE-KMS. Caller needs `kms:Encrypt`, `kms:Decrypt`, `kms:GenerateDataKey`. |
 | `assume_role` | Object: `role_arn` (required), `session_name`, `external_id`, `duration`, `policy`, `policy_arns`, `source_identity`, `tags`, `transitive_tag_keys` |
@@ -65,8 +65,8 @@ terraform {
 | `access_key`, `secret_key`, `token` | Supported; do not use. They end up in `.terraform/` and in plan files. |
 | `acl`, `sse_customer_key` | Canned ACL; SSE-C key. Avoid both. |
 | `use_path_style`, `endpoints`, `skip_*` flags | For emulators and S3-compatible stores only |
-| `dynamodb_table` | **Deprecated.** DynamoDB lock table with a string partition key `LockID`. Scheduled for removal in a future minor version. |
-| `dynamodb_endpoint` | **Deprecated.** Was replaced by `endpoints.dynamodb`. |
+| `dynamodb_table` | **Deprecated** since 1.11 **(verify)**. DynamoDB lock table with a string partition key `LockID`. Due for removal in a future minor version. |
+| `dynamodb_endpoint`, `endpoint`, `iam_endpoint`, `sts_endpoint`, `force_path_style` | **Deprecated.** Use `endpoints.dynamodb`, `endpoints.s3`, `endpoints.iam`, `endpoints.sts`, `use_path_style`. |
 
 The backend authenticates **separately** from the `provider "aws"` block. State can live in one account while resources are created in another.
 
@@ -176,9 +176,9 @@ Removing the `backend` block and running `terraform init -migrate-state` copies 
 
 | Fact | Detail |
 |---|---|
-| What takes a lock | Anything that could write state: `plan`, `apply`, `destroy`, `import`, `state mv`, `state rm`, `state push`, `force-unlock`. Read-only `state list`, `state show`, `output` do not. |
-| S3-native lock | Object `KEY.tflock` next to the state. Needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on that object. |
-| DynamoDB lock (deprecated) | Item keyed `BUCKET/KEY` in the lock table. Needs `dynamodb:DescribeTable`, `GetItem`, `PutItem`, `DeleteItem`. |
+| What takes a lock | Anything that could write state: `plan`, `apply`, `destroy`, `import`, `state mv`, `state rm`, `state push`. Read-only `state list`, `state show`, `output` do not. |
+| S3-native lock | Object `KEY.tflock` next to the state, created with a conditional put (S3 answers `412 PreconditionFailed` to a second writer). Body is the lock info as JSON: `ID`, `Operation`, `Info`, `Who`, `Version`, `Created`, `Path` (seen in [lab 02](../labs/02-remote-state/README.md)). Needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on that object. |
+| DynamoDB lock (deprecated) | Item keyed `BUCKET/KEY` in the lock table, lock info in its `Info` attribute. Needs `dynamodb:DescribeTable`, `GetItem`, `PutItem`, `DeleteItem`. |
 | Lock held | The command fails at once with the lock ID, holder, and time. `-lock-timeout=60s` retries instead. |
 | `-lock=false` | Skips locking. Only for a read-only plan when you accept the risk. |
 | Backend without locking support | Terraform proceeds with no protection. Check the backend's documentation. |

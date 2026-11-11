@@ -69,7 +69,7 @@ terraform fmt -check -diff -recursive                             # CI gate
 | `-var 'NAME=VALUE'` | Set one root input variable. Repeatable. |
 | `-var-file=FILE` | Set variables from a `.tfvars` file. Repeatable. |
 | `-detailed-exitcode` | Exit `0` no changes, `1` error, `2` succeeded with changes present |
-| `-generate-config-out=FILE` | Write HCL for resources named in `import` blocks that have no `resource` block yet. The file must not exist. Experimental **(verify)**. |
+| `-generate-config-out=FILE` | Write HCL for resources named in `import` blocks that have no `resource` block yet. The file must not exist. Added in 1.5 and still marked experimental **(verify)**. |
 | `-lock=false` | Do not take the state lock. Dangerous if others can run. |
 | `-lock-timeout=DURATION` | Wait for a lock, for example `60s`. Default `0s`. |
 | `-parallelism=N` | Concurrent operations. Default 10. |
@@ -99,7 +99,7 @@ terraform plan -generate-config-out=generated.tf                   # with import
 | `(known after apply)` | Value is computed by the provider at apply time |
 | `(sensitive value)` | Redacted in output; still in the plan file and state |
 
-Summary line: `Plan: 2 to add, 1 to change, 0 to destroy.` Imports, moves, and forgotten (`removed`) resources are reported there too.
+Summary line: `Plan: 2 to add, 1 to change, 0 to destroy.` Imports (`N to import`) and resources a `removed` block forgets (`N to forget` **(verify)**) are counted there too. Moves are shown per resource (`has moved to`), not counted.
 
 ## apply and destroy
 
@@ -131,7 +131,7 @@ terraform graph | dot -Tsvg > graph.svg      # needs Graphviz
 terraform graph -type=plan
 terraform version                            # also lists provider versions selected in this directory
 terraform version -json
-terraform modules                            # declared modules and their sources (added after 1.9) (verify)
+terraform modules -json                      # declared modules and their sources (1.10 or later)
 ```
 
 ## state
@@ -145,7 +145,7 @@ terraform modules                            # declared modules and their source
 | `terraform state pull` | Print the raw state JSON to stdout |
 | `terraform state push FILE` | **[changes state]** Overwrite remote state. Refuses a different lineage or a lower serial unless `-force`. |
 | `terraform state replace-provider FROM TO` | **[changes state]** Change the provider source address recorded for resources |
-| `terraform state identities` | Resource identity data held in state, as JSON (added in 1.12) **(verify)** |
+| `terraform state identities -json` | Resource identity data held in state; `-json` is required. Not in the 1.12 changelog: **(verify)** the version that added it. |
 
 ```bash
 terraform state list module.network
@@ -235,7 +235,7 @@ export TF_VAR_environment=prod TF_IN_AUTOMATION=1 TF_INPUT=0
 | `terraform taint ADDRESS` | Deprecated since 0.15.2 | `terraform apply -replace=ADDRESS`. The replacement shows in the plan before anything is marked. |
 | `terraform untaint ADDRESS` | Still present; only relevant to objects tainted by `taint` or by a failed create | Nothing to undo when you use `-replace`: drop the flag |
 | `terraform refresh` | Deprecated. Writes state with no review. | `terraform apply -refresh-only`, or `plan -refresh-only` to look first |
-| `terraform env` | Removed; old name for `workspace` **(verify)** | `terraform workspace` |
+| `terraform env` | Deprecated old name for `workspace`; documented as deprecated through 1.9 **(verify)** | `terraform workspace` |
 | `init -get-plugins=false` | Removed in 0.15 | `-plugin-dir`, or `provider_installation` in the CLI configuration |
 | `terraform import` (CLI) | Supported, not deprecated | `import` block for anything reviewed or repeated |
 | `terraform state mv`, `state rm` | Supported, not deprecated | `moved` and `removed` blocks |
