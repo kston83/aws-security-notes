@@ -1,0 +1,10 @@
+# floci AWS emulator for the labs in this folder.
+# Start:  docker compose up -d      Stop and discard all emulated resources:  docker compose down
+services:
+  floci:
+    image: floci/floci:latest
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_DEFAULT_REGION: us-east-1
+      FLOCI_STORAGE_MODE: memory
