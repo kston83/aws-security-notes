@@ -9,20 +9,14 @@ Build a reusable `secure-bucket` module (bucket, public access block, versioning
 ## Before you start
 
 - floci is running and the AWS CLI points at it. See [labs/README.md](../README.md#start-the-emulator).
-- Do [Lab 01](../01-first-apply/README.md) and [Lab 02](../02-remote-state/README.md) first.
-- Read [Terraform configuration](../../teaching/terraform/04-configuration.md) (objectives 4c–4e, 4g) and [Terraform modules](../../teaching/terraform/05-modules.md).
-
-| File | Holds |
-|---|---|
-| `variables.tf`, `terraform.tfvars` | Root inputs and the values this lab sets for them |
-| `main.tf`, `outputs.tf` | `locals`, the `module` call, root outputs |
-| `modules/secure-bucket/` | The **child module**: its own `variables.tf`, `main.tf`, `outputs.tf` |
+- Do [Lab 01](../01-first-apply/README.md) and [Lab 02](../02-remote-state/README.md) first. Read [Terraform configuration](../../teaching/terraform/04-configuration.md) (4c–4e, 4g) and [Terraform modules](../../teaching/terraform/05-modules.md).
+- Root inputs are in `variables.tf` with values in `terraform.tfvars`; `main.tf` and `outputs.tf` hold `locals`, the `module` call, and root outputs. The **child module** in `modules/secure-bucket/` has its own `variables.tf`, `main.tf`, and `outputs.tf`.
 
 ## Steps
 
 ### 1. Read the module's inputs
 
-A module's variables are its whole interface. `modules/secure-bucket/variables.tf` types every input, and uses `validation` blocks as guardrails:
+A module's variables are its whole interface. `modules/secure-bucket/variables.tf` types every input and uses `validation` blocks as guardrails:
 
 ```hcl
 variable "classification" {
@@ -43,7 +37,7 @@ variable "encryption" {
 }
 ```
 
-`optional(TYPE, DEFAULT)` lets a caller leave an object attribute out. The root variable `buckets` in `variables.tf` is a `map(object({...}))` built the same way: only `classification` is required.
+`optional(TYPE, DEFAULT)` lets a caller leave an attribute out. The root variable `buckets` is a `map(object({...}))` built the same way: only `classification` is required.
 
 ### 2. Initialize, and see why modules need it
 
@@ -53,10 +47,7 @@ terraform validate
 
 ```
 Error: Module not installed
-
-  on main.tf line 20:
-  20: module "bucket" {
-
+...
 This module is not yet installed. Run "terraform init" to install all modules
 required by this configuration.
 ```
@@ -76,7 +67,7 @@ Initializing modules...
 
 ### 3. Evaluate expressions in the console
 
-`terraform console` evaluates any expression against your variables, locals, and state. Pipe an expression in, or run it bare for an interactive prompt (`exit` to leave).
+`terraform console` evaluates expressions against your variables, locals, and state. Pipe one in, or run it bare for a prompt (`exit` to leave).
 
 ```bash
 echo 'var.buckets["logs"]' | terraform console
@@ -94,7 +85,7 @@ echo 'var.buckets["logs"]' | terraform console
 }
 ```
 
-`terraform.tfvars` set only `classification` for `logs`. The `optional()` defaults filled in the rest. Try the functions and `for` expressions that `main.tf` and `outputs.tf` use:
+`terraform.tfvars` set only `classification` for `logs`; `optional()` defaults filled in the rest. Try the expressions `main.tf` and `outputs.tf` use:
 
 | Expression | Result |
 |---|---|
@@ -107,7 +98,7 @@ echo 'var.buckets["logs"]' | terraform console
 
 ### 4. Set one variable four ways
 
-`environment` defaults to `sandbox` and `terraform.tfvars` sets it to `dev`. `owner` is set nowhere, so it has its default.
+`environment` defaults to `sandbox`; `terraform.tfvars` sets it to `dev`. `owner` is set nowhere.
 
 ```bash
 echo 'var.owner' | TF_VAR_owner=secops terraform console              # "secops": an environment variable beats a default
@@ -118,7 +109,7 @@ echo 'var.environment' | terraform console -var environment=prod      # "prod": 
 rm lab.auto.tfvars
 ```
 
-Lowest to highest: default, `TF_VAR_name`, `terraform.tfvars`, `*.auto.tfvars` (in file name order), then `-var` and `-var-file` in the order given. A `TF_VAR_` left exported in a pipeline loses silently to a committed `.tfvars` file, which is usually what you want and occasionally a surprise.
+Lowest to highest: default, `TF_VAR_name`, `terraform.tfvars`, `*.auto.tfvars` (file name order), then `-var` and `-var-file` in the order given. A `TF_VAR_` exported in a pipeline loses silently to a committed `.tfvars` file.
 
 ### 5. Read the module call, then apply
 
@@ -138,24 +129,18 @@ module "bucket" {
 }
 ```
 
-Inside the module, `main.tf` has a conditional resource (`count = var.enforce_tls ? 1 : 0` on the bucket policy) and a `dynamic "statement"` block that adds a deny-unencrypted-uploads statement only when `classification` is `restricted`.
+Inside, the module's `main.tf` has a conditional resource (`count = var.enforce_tls ? 1 : 0` on the bucket policy) and a `dynamic "statement"` block that adds a deny-unencrypted-uploads statement only for `restricted` buckets.
 
 ```bash
 terraform apply         # [changes state] answer yes
 ```
 
 ```
-Plan: 14 to add, 0 to change, 0 to destroy.
-...
 Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
-
-Outputs:
-
+...
 bucket_arns = {
   "logs" = "arn:aws:s3:::lab03-dev-logs"
-  "reports" = "arn:aws:s3:::lab03-dev-reports"
-  "scratch" = "arn:aws:s3:::lab03-dev-scratch"
-}
+...
 restricted_buckets = tolist([
   "lab03-dev-reports",
 ])
@@ -166,7 +151,7 @@ tls_enforced = {
 }
 ```
 
-Fourteen is 3 buckets × 4 resources, plus a policy for the two buckets with `enforce_tls` left on. The root can print these values only because the module declares `output` blocks and the root re-exports them (`mod.arn` in `outputs.tf`). `terraform state list` shows the addresses: `module.bucket["logs"].aws_s3_bucket.this`, `module.bucket["logs"].aws_s3_bucket_policy.this[0]`, and so on.
+Fourteen is 3 buckets × 4 resources, plus a policy for the two buckets with `enforce_tls` on. The root can print these only because the module declares `output` blocks and the root re-exports them (`mod.arn` in `outputs.tf`). `terraform state list` shows addresses such as `module.bucket["logs"].aws_s3_bucket.this` and `module.bucket["logs"].aws_s3_bucket_policy.this[0]`.
 
 ### 6. Add a second module call
 
@@ -188,33 +173,27 @@ terraform plan          # Plan: 5 to add, 0 to change, 0 to destroy.
 rm extra.tf
 ```
 
-Every new `module` block needs `terraform get` or `terraform init`, even when the source is already on disk. `get` installs modules and nothing else. `init` also handles providers and the backend.
+Every new `module` block needs `terraform get` or `terraform init`, even when the source is already on disk. `get` installs modules only; `init` also handles providers and the backend.
 
 ### 7. Know what `source` and `version` mean
 
 | Source type | `source` looks like | Pinning a version |
 |---|---|---|
-| Local path | `./modules/secure-bucket` (must start `./` or `../`) | Not possible. The module is whatever is in the directory, so it versions with the calling repository. |
+| Local path | `./modules/secure-bucket` (must start `./` or `../`) | Not possible: it versions with the calling repository |
 | Registry (public or private) | `NAMESPACE/NAME/PROVIDER`, or `HOSTNAME/NAMESPACE/NAME/PROVIDER` | `version = "~> 1.2"`. Only registry sources accept `version`. |
 | Git | `git::https://example.com/ORG/REPO.git//modules/secure-bucket?ref=v1.2.0` | `?ref=` with a tag or commit hash. `//` separates the repository from a subdirectory. |
 
-Pin anything you do not control. An unpinned registry module, or a git source with a branch as `ref`, lets someone else change what your next `init -upgrade` deploys. A commit hash is the strongest pin. This is the supply-chain half of SCS-C03 skill 6.2.1; see [Securing Terraform on AWS](../../teaching/terraform/09-securing-terraform-on-aws.md).
+Pin anything you do not control. An unpinned registry module, or a Git `ref` naming a branch, lets someone else change what your next `init -upgrade` deploys. A commit hash is the strongest pin. This is the supply-chain half of SCS-C03 skill 6.2.1; see [Securing Terraform on AWS](../../teaching/terraform/09-securing-terraform-on-aws.md).
 
 ## Verify
 
 ```bash
 aws s3api list-buckets --query 'Buckets[?starts_with(Name, `lab03-`)].Name' --output text
-```
-
-```
-lab03-dev-logs	lab03-dev-reports	lab03-dev-scratch
-```
-
-```bash
 aws s3api get-bucket-encryption --bucket lab03-dev-reports --query 'ServerSideEncryptionConfiguration.Rules[0]'
 ```
 
 ```
+lab03-dev-logs	lab03-dev-reports	lab03-dev-scratch
 {
     "ApplyServerSideEncryptionByDefault": {
         "SSEAlgorithm": "aws:kms"
@@ -228,7 +207,7 @@ aws s3api get-bucket-versioning --bucket lab03-dev-scratch --query Status     # 
 aws s3api get-bucket-policy --bucket lab03-dev-reports --query Policy --output text
 ```
 
-The policy has two statement IDs, `DenyInsecureTransport` and `DenyUnencryptedUploads`. The same command for `lab03-dev-logs` shows only the first (no `dynamic` statement), and for `lab03-dev-scratch` it fails with `NoSuchBucketPolicy` (`count` was 0).
+The policy has two statement IDs, `DenyInsecureTransport` and `DenyUnencryptedUploads`. For `lab03-dev-logs` it has only the first (no `dynamic` statement); for `lab03-dev-scratch` the command fails with `NoSuchBucketPolicy` (`count` was 0).
 
 ```bash
 aws s3api get-bucket-tagging --bucket lab03-dev-logs --query 'TagSet[?Key==`RetentionDays`||Key==`Classification`]' --output text
@@ -241,7 +220,7 @@ Classification	internal
 
 ## Break it
 
-**1. Fail a validation.** Two guardrails, one in the root and one in the module:
+**1. Fail a validation**, once in the root and once in the module:
 
 ```bash
 terraform plan -var environment=production
@@ -254,11 +233,7 @@ Error: Invalid value for variable
     │ var.environment is "production"
 
 environment must be one of: sandbox, dev, test, prod.
-
-This was checked by the validation rule at variables.tf:6,3-13.
-```
-
-```
+...
 Error: Invalid value for variable
 
   on main.tf line 25, in module "bucket":
@@ -272,7 +247,7 @@ This was checked by the validation rule at
 modules/secure-bucket/variables.tf:20,3-13.
 ```
 
-The second error points at the caller's line and the module's rule. Validation fails the plan before any API call, so nothing changed. Nothing to put back.
+The second error points at the caller's line and the module's rule. Validation fails the plan before any API call; nothing to put back.
 
 **2. Reach inside a module.** Create `scope.tf`, run `terraform validate`, then delete the file:
 
@@ -290,16 +265,13 @@ Error: Unsupported attribute
 This object does not have an attribute named "aws_s3_bucket".
 ```
 
-A module call is an object made of the module's **outputs** and nothing else. Resources, locals, and variables inside it are out of scope for the caller, and the root's `local.name_prefix` is equally invisible inside the module. Values cross the boundary only through `variable` (in) and `output` (out).
+A module call is an object made of the module's **outputs** and nothing else. Its resources, locals, and variables are out of the caller's scope, and the root's `local.name_prefix` is equally invisible inside the module. Values cross only through `variable` (in) and `output` (out).
 
 **3. Version a local module.** Add `version = "1.0.0"` under `source` in `main.tf` and run `terraform init`:
 
 ```
 Error: Invalid registry module source address
 ...
-Failed to parse module registry address: can't use local directory
-"./modules/secure-bucket" as a module registry address.
-
 Terraform assumed that you intended a module registry source address because
 you also set the argument "version", which applies only to registry modules.
 ```
@@ -317,14 +289,10 @@ terraform plan -var 'buckets={logs={versioning=true}}'
 ```
 Unsuitable value for var.buckets set using -var="buckets=...": a bool is
 required.
-```
-
-```
+...
 Unsuitable value for var.buckets set using -var="buckets=...": map of object
 required.
-```
-
-```
+...
 Unsuitable value for var.buckets set using -var="buckets=...": element
 "logs": attribute "classification" is required.
 ```
@@ -345,7 +313,7 @@ Changes to Outputs:
     }
 ```
 
-The map key is the instance's identity. Removing a key destroys that instance and leaves the others alone, which is why `for_each` over a map is safer than `count` over a list, where removing an element renumbers everything after it. On a real bucket holding data, this plan is the last warning you get. Do not apply; put the `scratch` block back and confirm `terraform plan` reports `No changes`.
+The map key is the instance's identity: removing it destroys that instance and leaves the others alone. With `count` over a list, removing an element renumbers everything after it. On a bucket holding data this plan is your last warning. Do not apply; put `scratch` back and confirm `terraform plan` reports `No changes`.
 
 ## Clean up
 
@@ -358,10 +326,10 @@ Delete `extra.tf`, `scope.tf`, and `lab.auto.tfvars` if any are left over.
 
 ## What differs on real AWS
 
-- **Bucket policies are stored but not enforced by floci.** The lab proves the policy document is attached, not that a plain-HTTP request or an unencrypted upload is denied. On AWS, test both with a real request.
-- **Bucket names are global.** `lab03-dev-logs` is almost certainly taken. Real modules add an account ID or random suffix to the name.
-- **`aws:kms` with no key ID** uses the AWS managed key `aws/s3`. A restricted bucket normally names a customer managed key so that the key policy, not just IAM, controls who can decrypt. See [Lab 05](../05-kms-and-secrets/README.md) and the [KMS cheatsheet](../../cheatsheets/kms.md).
-- **Account-level public access block.** The module sets the bucket-level one. AWS also has an account-level setting that should be on regardless. See the [S3 security cheatsheet](../../cheatsheets/s3-security.md).
+- **floci stores bucket policies but does not enforce them.** The lab proves the policy is attached, not that a plain-HTTP request or an unencrypted upload is denied. On AWS, test both with a real request.
+- **Bucket names are global.** `lab03-dev-logs` is almost certainly taken. Real modules add an account ID or random suffix.
+- **`aws:kms` with no key ID** uses the AWS managed key `aws/s3`. A restricted bucket normally names a customer managed key so the key policy, not just IAM, controls who can decrypt. See [Lab 05](../05-kms-and-secrets/README.md) and the [KMS cheatsheet](../../cheatsheets/kms.md).
+- **Account-level public access block.** The module sets the bucket-level one; the account-level setting should be on regardless. See the [S3 security cheatsheet](../../cheatsheets/s3-security.md).
 - **`force_destroy = true`** is a lab convenience. Leave it out of a module that holds real data, so `destroy` fails on a non-empty bucket.
-- **Module source.** A shared module would live in its own repository or a private registry and be called with a pinned `version` or `?ref=`, not a local path.
+- **Module source.** A shared module lives in its own repository or a private registry, called with a pinned `version` or `?ref=`, not a local path.
 - **Provider settings.** Remove the fake keys, `skip_*` flags, `s3_use_path_style`, and `endpoints` from `providers.tf`, as [labs/README.md](../README.md#the-lab-provider-block) describes.
