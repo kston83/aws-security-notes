@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Checks every relative Markdown link in the repo: the target file must exist,
 # and if the link has a #fragment, the target must contain a matching heading.
-# External (http/https/mailto) links are not checked.
+# External (http/https/mailto) links are not checked, nor is anything inside
+# fenced code blocks or inline code spans.
 # Usage: scripts/check-links.sh   (exit status 1 if any link is broken)
 set -uo pipefail
 
@@ -48,7 +49,10 @@ while IFS= read -r file; do
         broken=$((broken + 1))
       fi
     fi
-  done < <(grep -oE '\]\([^)[:space:]]+\)' "$file" | sed -E 's/^\]\(//; s/\)$//')
+  # Skip fenced code blocks and inline code spans: GitHub renders neither as links.
+  done < <(awk '/^[[:space:]]*(```|~~~)/ { fence = !fence; next } !fence' "$file" \
+             | sed -E 's/`[^`]*`//g' \
+             | grep -oE '\]\([^)[:space:]]+\)' | sed -E 's/^\]\(//; s/\)$//')
 done < <(find . -name '*.md' -not -path './.git/*' | sed 's|^\./||' | sort)
 
 echo "Checked $checked relative links; $broken broken."

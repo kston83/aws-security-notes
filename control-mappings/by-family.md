@@ -19,7 +19,7 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 | AC-3(7) | Role-Based Access Control | – | IAM roles and permission sets per job function | Permission set definitions |
 | AC-3(13) | Attribute-Based Access Control | – | Tag-based conditions: `aws:PrincipalTag`, `aws:ResourceTag`; session tags from the IdP | Policies, tag policies |
 | AC-4 | Information Flow Enforcement | M H | Security groups, NACLs, route tables, Network Firewall, transit gateway route tables, VPC endpoint policies, data perimeter conditions in SCPs and RCPs, DNS Firewall | Config, Network Access Analyzer, flow logs |
-| AC-5 | Separation of Duties | M H | Separate accounts for log archive, security tooling, and workloads; KMS key administrators distinct from key users; pipeline roles distinct from developers; permissions boundaries | Account structure, key policies, IAM policies |
+| AC-5 | Separation of Duties | M H | Separate accounts for log archive, security tooling, and workloads; KMS key administrators distinct from key users; pipeline roles distinct from developers; separate Terraform plan and apply roles; permissions boundaries | Account structure, key policies, IAM policies |
 | AC-6 | Least Privilege | M H | Scoped IAM policies; permissions boundaries; SCPs and RCPs; Access Analyzer policy generation and unused access; no wildcard admin | `iam-policy-no-statements-with-admin-access`, Access Analyzer |
 | AC-6(1) | Authorize Access to Security Functions | M H | SCP restricting changes to CloudTrail, GuardDuty, Config, Security Hub to a security role | SCP text, CloudTrail |
 | AC-6(2) | Non-Privileged Access for Nonsecurity Functions | M H | Separate read-only and administrative permission sets; no routine use of admin roles | Identity Center assignments |
@@ -73,11 +73,12 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 
 | Control | Name | Baseline | AWS configurations | Evidence |
 |---|---|---|---|---|
-| CM-2 | Baseline Configuration | L M H | Infrastructure as code; Control Tower landing zone; Image Builder golden images; Config recording | Repositories, Config snapshots |
-| CM-2(2) | Automation Support for Accuracy and Currency | M H | Config recorder; drift detection | Config |
-| CM-3 | Configuration Change Control | M H | Pipelines with approvals; CloudFormation change sets; CloudTrail and Config record every change | Pipeline history, Config timeline |
-| CM-4 | Impact Analyses | L M H | Change sets; Access Analyzer `CheckNoNewAccess`; these mappings | Pipeline output |
-| CM-5 | Access Restrictions for Change | L M H | Deployment only through pipeline roles; SCPs restricting manual change; stack policies | IAM, SCP |
+| CM-2 | Baseline Configuration | L M H | Infrastructure as code (CloudFormation, Terraform with pinned provider and module versions); Control Tower landing zone; Image Builder golden images; Config recording | Repositories, Config snapshots |
+| CM-2(2) | Automation Support for Accuracy and Currency | M H | Config recorder; drift detection; scheduled Terraform refresh-only plans | Config, scheduled plan results |
+| CM-3 | Configuration Change Control | M H | Pipelines with approvals; CloudFormation change sets; reviewed Terraform plans applied from the saved plan file; state locking; CloudTrail and Config record every change | Pipeline history, Config timeline |
+| CM-3(2) | Testing, Validation, and Documentation of Changes | M H | `terraform validate` and `terraform test` in the pipeline; cfn-lint | Pipeline output |
+| CM-4 | Impact Analyses | L M H | Change sets; Terraform plan output and policy as code evaluated on the plan; Access Analyzer `CheckNoNewAccess`; these mappings | Pipeline output |
+| CM-5 | Access Restrictions for Change | L M H | Deployment only through pipeline roles assumed through OIDC with repository and branch conditions; protected branches; SCPs restricting manual change; stack policies | IAM, SCP |
 | CM-6 | Configuration Settings | L M H | Config rules and conformance packs; Security Hub controls; declarative policies; State Manager | Compliance status |
 | CM-6(1) | Automated Management, Application, and Verification | H | Config auto-remediation; Firewall Manager; Control Tower controls | Remediation history |
 | CM-7 | Least Functionality | L M H | Security groups limited to required ports; Region restriction SCP; service allow-list SCP; minimal images | `restricted-ssh`, `vpc-sg-open-only-to-authorized-ports`, SCP |
@@ -85,7 +86,7 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 | CM-8 | System Component Inventory | L M H | Config resource inventory and aggregator; Systems Manager Inventory; Resource Explorer; tags | Aggregator queries |
 | CM-8(1) | Updates During Installation and Removal | M H | Config records resource creation and deletion automatically | Config timeline |
 | CM-12 | Information Location | M H | Macie discovery; Region restriction; tags for data classification | Macie findings |
-| CM-14 | Signed Components | – | AWS Signer with Lambda code signing configuration; signed container images | Signing profiles |
+| CM-14 | Signed Components | – | AWS Signer with Lambda code signing configuration; signed container images; Terraform CLI release signature verified in the runner image | Signing profiles, image build logs |
 
 ## CP: Contingency Planning
 
@@ -95,11 +96,11 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 | CP-4 | Contingency Plan Testing | L M H | AWS Backup restore testing; Fault Injection Service; Application Recovery Controller drills | Test results |
 | CP-6 | Alternate Storage Site | M H | Cross-Region replication; AWS Backup cross-Region and cross-account copy | Replication and copy configuration |
 | CP-7 | Alternate Processing Site | M H | Multi-AZ and multi-Region deployment | Architecture |
-| CP-9 | System Backup | L M H | AWS Backup plans by policy; RDS automated backups; DynamoDB point-in-time recovery; S3 Versioning; Data Lifecycle Manager | `db-instance-backup-enabled`, `dynamodb-pitr-enabled`, `s3-bucket-versioning-enabled`, Backup Audit Manager |
+| CP-9 | System Backup | L M H | AWS Backup plans by policy; RDS automated backups; DynamoDB point-in-time recovery; S3 Versioning (including the Terraform state bucket); Data Lifecycle Manager | `db-instance-backup-enabled`, `dynamodb-pitr-enabled`, `s3-bucket-versioning-enabled`, Backup Audit Manager |
 | CP-9(1) | Testing for Reliability and Integrity | M H | AWS Backup restore testing | Restore test reports |
 | CP-9(3) | Separate Storage for Critical Information | H | Backup account; logically air-gapped vault | Vault configuration |
 | CP-9(8) | Cryptographic Protection | M H | Backup vault KMS encryption; encrypted snapshots | Vault and snapshot settings |
-| CP-10 | System Recovery and Reconstitution | L M H | Infrastructure as code redeploy; point-in-time restore; Auto Scaling replacement | Recovery exercise records |
+| CP-10 | System Recovery and Reconstitution | L M H | Infrastructure as code redeploy; Terraform state restore from a previous object version; point-in-time restore; Auto Scaling replacement | Recovery exercise records |
 
 ## IA: Identification and Authentication
 
@@ -113,9 +114,9 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 | IA-5 | Authenticator Management | L M H | IAM password policy; access key rotation or elimination; Secrets Manager rotation; ACM renewal | `iam-password-policy`, `access-keys-rotated`, `secretsmanager-rotation-enabled-check` |
 | IA-5(1) | Password-Based Authentication | L M H | Password policy at the IdP and in IAM; Cognito password policy and compromised-credential checks | Policy settings |
 | IA-5(2) | Public Key-Based Authentication | M H | Private CA; Roles Anywhere trust anchors; mutual TLS | CA configuration |
-| IA-5(7) | No Embedded Unencrypted Static Authenticators | – | Secrets Manager and Parameter Store references; secret scanning in pipelines | Scan results |
+| IA-5(7) | No Embedded Unencrypted Static Authenticators | – | Secrets Manager and Parameter Store references; Terraform ephemeral resources and write-only arguments keeping secrets out of state; secret scanning in pipelines | Scan results |
 | IA-8 | Identification and Authentication (Non-Organizational Users) | L M H | Cognito user pools; federation with external IdPs | User pool configuration |
-| IA-9 | Service Identification and Authentication | – | IAM roles for services; service principals with `aws:SourceArn`; mutual TLS | Trust and resource policies |
+| IA-9 | Service Identification and Authentication | – | IAM roles for services; OIDC federation for CI pipelines with `sub` and `aud` conditions; service principals with `aws:SourceArn`; mutual TLS | Trust and resource policies |
 | IA-11 | Re-Authentication | L M H | Session duration limits; `aws:MultiFactorAuthAge` conditions | Role settings, policies |
 
 ## IR: Incident Response
@@ -156,13 +157,13 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 | SA-3 | System Development Life Cycle | L M H | Pipelines with security stages | Pipeline definitions |
 | SA-8 | Security and Privacy Engineering Principles | L M H | Well-Architected reviews; reference architectures | Review records |
 | SA-9 | External System Services | L M H | AWS as provider: Artifact reports and agreements | Artifact |
-| SA-10 | Developer Configuration Management | M H | Source control; signed commits; IaC | Repository settings |
-| SA-11 | Developer Testing and Evaluation | M H | Code scanning; Inspector in the pipeline; Guard and cfn-lint | Scan results |
-| SA-11(1) | Static Code Analysis | – | Inspector code scanning; Q Developer; CodeGuru Security | Findings |
+| SA-10 | Developer Configuration Management | M H | Source control; signed commits; IaC with branch protection and pinned provider and module versions | Repository settings |
+| SA-11 | Developer Testing and Evaluation | M H | Code scanning; Inspector in the pipeline; Guard and cfn-lint; `terraform validate`, `terraform test`, and IaC scanners for Terraform | Scan results |
+| SA-11(1) | Static Code Analysis | – | Inspector code scanning; Q Developer; CodeGuru Security; Checkov or Trivy on Terraform configuration and plans | Findings |
 | SA-15 | Development Process, Standards, and Tools | M H | Service Catalog approved products | Portfolio |
-| SR-3 | Supply Chain Controls and Processes | L M H | Private artifact repositories (CodeArtifact, ECR); allowed AMIs; SBOM export from Inspector | Repository policy, SBOMs |
+| SR-3 | Supply Chain Controls and Processes | L M H | Private artifact repositories (CodeArtifact, ECR); allowed AMIs; private Terraform registry or provider mirror; SBOM export from Inspector | Repository policy, SBOMs |
 | SR-4 | Provenance | H | Image and code signing; SBOM | Signatures |
-| SR-11 | Component Authenticity | L M H | Signer; ECR image signature verification | Signing configuration |
+| SR-11 | Component Authenticity | L M H | Signer; ECR image signature verification; Terraform dependency lock file checksums verified at `init` | Signing configuration |
 
 ## SC: System and Communications Protection
 
@@ -208,7 +209,7 @@ Families that are mostly procedural (AT, PL, PM, PS, PT) or mostly inherited fro
 | SI-4(5) | System-Generated Alerts | M H | EventBridge to SNS, chat, or ticketing | Rule definitions |
 | SI-4(16) | Correlate Monitoring Information | – | Security Hub correlation; Detective; GuardDuty attack sequences | Findings |
 | SI-5 | Security Alerts, Advisories, and Directives | L M H | AWS Health and security bulletins routed to the security team; Inspector | Notification configuration |
-| SI-7 | Software, Firmware, and Information Integrity | M H | CloudTrail log file validation; S3 Object Lock and Versioning; code and image signing; S3 checksums | Validation output, lock configuration |
+| SI-7 | Software, Firmware, and Information Integrity | M H | CloudTrail log file validation; S3 Object Lock and Versioning; code and image signing; S3 checksums; Terraform dependency lock file; state bucket versioning and locking | Validation output, lock configuration |
 | SI-7(1) | Integrity Checks | M H | Same; file integrity monitoring on instances | Reports |
 | SI-10 | Information Input Validation | M H | WAF managed rules; API Gateway request validation | WAF configuration |
 | SI-12 | Information Management and Retention | L M H | S3 Lifecycle; Object Lock retention; log retention settings; backup retention | Lifecycle and retention configuration |

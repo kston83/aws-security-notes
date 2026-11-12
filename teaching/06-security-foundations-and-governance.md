@@ -125,7 +125,7 @@ IaC makes configuration reviewable, repeatable, and testable. Security checks ru
 | **CloudFormation Guard** | Policy as code: rules such as "every S3 bucket must have encryption configured." Runs in a pipeline, and the same language powers Config custom rules and hooks. |
 | **CloudFormation hooks** | Proactive control: inspect a resource before create or update and fail the operation if noncompliant |
 | **Stack policies, termination protection, drift detection** | Protect deployed stacks from unintended updates and deletion; find manual changes |
-| **Third-party IaC** (Terraform and others) | Same principles: scan plans in the pipeline, protect state files (they contain secrets), least-privilege deployment roles |
+| **Third-party IaC** (Terraform and others) | Same principles: scan plans in the pipeline, protect state files (they contain secrets), least-privilege deployment roles. See [Securing Terraform on AWS](terraform/09-securing-terraform-on-aws.md). |
 
 Keep secrets out of templates. Use dynamic references to Secrets Manager or Parameter Store, and `NoEcho` for parameters.
 

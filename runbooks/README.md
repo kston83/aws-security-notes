@@ -18,6 +18,10 @@ These are starting points. Adapt role names, account IDs, and escalation contact
 | [CloudTrail tampering](cloudtrail-tampering.md) | Logging stopped, trail changed, detective service disabled |
 | [KMS key scheduled for deletion](kms-key-scheduled-deletion.md) | `ScheduleKeyDeletion` or `DisableKey` on a key in use |
 | [Ransomware and data destruction](ransomware-data-destruction.md) | Mass deletion or encryption of data, ransom note |
+| [Terraform state exposure](terraform-state-exposure.md) | State file public, shared outside the organization, or committed to a repository |
+| [Terraform state lock and corruption](terraform-state-lock-and-corruption.md) | Stuck state lock; corrupted, deleted, or overwritten state; failed or raced apply |
+| [Terraform unexpected drift](terraform-unexpected-drift.md) | Drift detection reports a change nobody owns |
+| [Terraform pipeline compromise](terraform-pipeline-compromise.md) | Malicious change applied, CI runner or token compromised, deployment role trust abused, tampered provider or module |
 
 New runbooks start from [_template.md](_template.md).
 

@@ -19,6 +19,7 @@ These mappings connect AWS service configurations to the 800-53 controls they af
 | [services/logging-detection.md](services/logging-detection.md) | CloudTrail, CloudWatch, Config, GuardDuty, Security Hub, Detective, Security Lake | |
 | [services/compute.md](services/compute.md) | EC2, Systems Manager, Inspector, containers, Lambda, pipelines | |
 | [services/governance.md](services/governance.md) | Organizations, Control Tower, CloudFormation, Audit Manager, incident response tooling | |
+| [services/iac-terraform.md](services/iac-terraform.md) | Terraform pipelines: source control, state storage, deployment credentials, providers and modules, pre-deployment checks, drift | |
 | [control-impact-matrix.csv](control-impact-matrix.csv) | One row per configuration-control pair | Filtering, pivoting, importing into a GRC tool |
 
 The CSV is generated. Edit the tables in `services/`, then run `scripts/build-control-matrix.sh`. Do not edit the CSV by hand.
