@@ -1,6 +1,6 @@
 ---
 name: run-lab
-description: Run one Terraform lab under labs/ end to end against the floci emulator and make its README match reality (real output, fixed steps, emulator differences recorded). Use when finishing or re-testing a lab, after changing a lab's .tf files or README, or when working issue #2. Also covers running several labs in sequence via subagents and the wrap-up (commit, labs/README.md table, issue checkbox).
+description: Run one Terraform lab under labs/ end to end against the floci emulator and make its README match reality (real output, fixed steps, emulator differences recorded). Use when finishing or re-testing a lab, or after changing a lab's .tf files or README. Also covers running several labs in sequence via subagents and the wrap-up (commit, labs/README.md table, issue checkbox).
 ---
 
 # Run a lab end to end
@@ -19,7 +19,7 @@ Check first that nothing is already listening: `curl -s http://localhost:4566/_f
     setsid nohup FLOCI_BINARY > FLOCI_LOG 2>&1 < /dev/null &
   ```
 
-  Then poll the health endpoint until it answers. Where the binary and toolchain live on this machine is in local memory, not in the repo.
+  Then poll the health endpoint until it answers. Where the binary and toolchain live depends on the machine, so keep that in your own setup notes, not in the repo.
 
 Lab shell: `AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 AWS_ENDPOINT_URL=http://localhost:4566`.
 
@@ -39,11 +39,11 @@ Do the lab exactly as a learner would: every Step, every Verify command, every *
 - If a Break-it exercise only breaks on real AWS, say so in that exercise rather than implying it fails on floci.
 - Record every place floci is more forgiving or behaves differently in **What differs on real AWS**. Mark untested real-AWS claims **(verify)**.
 - Remove the `> **Test status:** ...` line once the lab is fully run.
-- Keep the fixed section order (Goal, Before you start, Steps, Verify, Break it, Clean up, What differs on real AWS) and keep the README lean: a few lines of output per step. Labs that were run in full sit around 300–370 lines; do not grow past that.
+- Keep the fixed section order (Goal, Before you start, Steps, Verify, Break it, Clean up, What differs on real AWS) and keep the README lean: a few lines of output per step. Do not grow a README past 370 lines while the length question in issue #4 is open.
 
 ## 4. Stop and check
 
-- `terraform destroy` anything still applied, then stop the emulator (`docker compose down`, or `pkill -f floci-aws` for the native build) and confirm it is gone.
+- `terraform destroy` anything still applied, then stop the emulator (`docker compose down`, or `pkill -f FLOCI_BINARY` for the native build) and confirm it is gone.
 - `bash scripts/check-links.sh` from the repo root (Git Bash): 0 broken.
 - `git status`: only `labs/NN-name/` changed, with no state, lock file, plan, or `.terraform/` in it.
 
