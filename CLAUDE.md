@@ -24,7 +24,7 @@ terraform init && terraform apply    # then the lab's Verify commands, each Brea
 terraform test                        # labs that ship .tftest.hcl files (07)
 ```
 
-If you change a lab's `.tf` files or README, re-run that lab top to bottom and paste real output into the README. Never invent expected output.
+If you change a lab's `.tf` files or README, re-run that lab top to bottom and paste real output into the README. Never invent expected output. The `run-lab` skill (`.claude/skills/run-lab/`) is the full procedure, including running several labs in sequence and the commit and issue wrap-up.
 
 ## How the pieces connect
 
